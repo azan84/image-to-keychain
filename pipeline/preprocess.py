@@ -15,9 +15,36 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from .util import get_logger, load_image_rgba
+
+
+def _flood_from_corners(candidate: np.ndarray) -> np.ndarray:
+    """4-connectivity BFS starting from any corner pixel that's True in
+    `candidate`. Returns a bool mask of all pixels reached. Runs via
+    iterative neighbor-expansion (no Python-level BFS), which is fast
+    enough for 1M-pixel images."""
+    H, W = candidate.shape
+    reached = np.zeros((H, W), dtype=bool)
+    for cy, cx in ((0, 0), (0, W - 1), (H - 1, 0), (H - 1, W - 1)):
+        if candidate[cy, cx]:
+            reached[cy, cx] = True
+    if not reached.any():
+        return reached
+    # Iterative neighbor-expansion until fixed point. Each pass dilates the
+    # reached set by one pixel in the 4 cardinal directions, clipped to the
+    # candidate mask.
+    while True:
+        grown = reached.copy()
+        grown[1:, :]  |= reached[:-1, :]
+        grown[:-1, :] |= reached[1:, :]
+        grown[:, 1:]  |= reached[:, :-1]
+        grown[:, :-1] |= reached[:, 1:]
+        grown &= candidate
+        if np.array_equal(grown, reached):
+            return reached
+        reached = grown
 
 
 @dataclass
@@ -159,9 +186,17 @@ def preprocess(input_image: Path, cfg: dict[str, Any]) -> PreprocessResult:
             bg_cluster_ids = [int(x) for x in override]
         if bg_cluster_ids:
             log.info("  corner-detected background clusters: %s", bg_cluster_ids)
-            bg_drop = np.isin(labels, np.array(bg_cluster_ids, dtype=np.int32))
-            labels[bg_drop] = -1
-            bg_mask = bg_mask | bg_drop
+            # Flood-fill from the four corners through candidate-bg pixels
+            # only. This way *interior* white/grey pixels (eye highlights,
+            # shirt highlights, etc.) that happen to be in a bg cluster are
+            # kept as legitimate colors, while the outer sea of bg is dropped.
+            candidate = np.isin(labels, np.array(bg_cluster_ids, dtype=np.int32))
+            reached = _flood_from_corners(candidate)
+            interior_kept = int(candidate.sum() - reached.sum())
+            log.info("  flood-fill from corners: %d bg pixels dropped, %d interior kept",
+                     int(reached.sum()), interior_kept)
+            labels[reached] = -1
+            bg_mask = bg_mask | reached
 
     # Log the palette for sanity
     for i, c in enumerate(palette):
