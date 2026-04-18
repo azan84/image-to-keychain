@@ -24,8 +24,10 @@ from typing import Any
 import numpy as np
 import vtracer
 from PIL import Image, ImageFilter
+from shapely.geometry import MultiPolygon
 
 from .preprocess import preprocess
+from .svg_polygons import svg_to_multipolygon
 from .util import get_logger, save_png
 
 
@@ -36,6 +38,7 @@ class LineExtractionResult:
     preview_png_path: Path
     line_pixel_count: int
     image_shape: tuple[int, int]
+    polygon: MultiPolygon          # in image-pixel coords, Y-flipped
 
 
 def _boundary_mask(labels: np.ndarray) -> np.ndarray:
@@ -112,19 +115,20 @@ def extract_lines(input_image: Path, intermediate_dir: Path,
             "color; lower max_colors or check the input."
         )
 
+    # vtracer binary mode traces dark pixels, so lines must be BLACK on WHITE.
     mask_png = intermediate_dir / "03_line_mask.png"
-    mask_img = np.zeros((H, W), dtype=np.uint8)
-    mask_img[mask] = 255
+    mask_img = np.full((H, W), 255, dtype=np.uint8)
+    mask_img[mask] = 0
     save_png(mask_img, mask_png)
 
     lines_svg = intermediate_dir / "04_lines.svg"
-    log.info("  vectorizing line mask (binary) \u2192 %s", lines_svg.name)
+    log.info("  vectorizing line mask (binary, polygon mode) \u2192 %s", lines_svg.name)
     vtracer.convert_image_to_svg_py(
         str(mask_png),
         str(lines_svg),
         colormode="binary",
         hierarchical="stacked",
-        mode="spline",
+        mode="polygon",
         filter_speckle=2,
         color_precision=1,
         layer_difference=0,
@@ -134,6 +138,10 @@ def extract_lines(input_image: Path, intermediate_dir: Path,
         splice_threshold=45,
         path_precision=3,
     )
+
+    line_poly = svg_to_multipolygon(lines_svg, flip_y_height=float(H), min_area=4.0)
+    log.info("  line polygon: %d subpolygon(s), bounds %s",
+             len(line_poly.geoms), line_poly.bounds)
 
     preview_png = intermediate_dir / "05_lines_preview.png"
     save_png(_build_preview(pre.rgba, mask), preview_png)
@@ -145,4 +153,5 @@ def extract_lines(input_image: Path, intermediate_dir: Path,
         preview_png_path=preview_png,
         line_pixel_count=final_count,
         image_shape=(H, W),
+        polygon=line_poly,
     )
