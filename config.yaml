@@ -27,10 +27,25 @@ hole_edge_margin: 3.0           # mm from silhouette edge to hole center
 # Vectorization
 vectorizer: "vtracer"           # vtracer | potrace
 simplify_tolerance: 0.5         # higher = fewer polygons
-line_color_threshold: 70        # RGB brightness below this = line art (0-255)
-line_dilate_px: 0               # optional 2D dilation of line mask before vectorizing
-max_colors: 6                   # k-means-cluster similar colors before vectorizing
 alpha_threshold: 128            # transparent background cutoff (0-255)
+
+# When the image has no real transparency (alpha=255 everywhere, common for
+# AI-generated PNGs with a baked-in grey/checkerboard background), the
+# pipeline auto-detects bg clusters by sampling the 4 image corners.
+corner_patch_px: 24             # size of each corner sampling square
+corner_bg_ratio: 0.10           # cluster flagged as bg if it covers >=10% of corners
+background_cluster_ids: []      # manual override — list of cluster ids to force-drop
+
+# Color clustering — tones/shades of the same hue are merged into one
+# cluster, so soft shading does NOT create a spurious line.
+max_colors: 6                   # k-means cluster count (AMS-friendly: 4-6)
+kmeans_seed: 0                  # deterministic runs
+kmeans_sample: 20000            # pixels sampled to fit centroids
+kmeans_iters: 15
+
+# Line extraction (color-boundary detection)
+line_dilate_px: 2               # 2D dilation so boundary lines are printable
+line_include_silhouette_edge: true   # true = outer outline included as a line
 
 # Quality
 mesh_resolution: "medium"       # low | medium | high — tessellation detail

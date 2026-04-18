@@ -49,7 +49,6 @@ def _merge_cli_overrides(cfg: dict[str, Any], overrides: dict[str, Any]) -> dict
 @click.option("--base-thickness", type=float, default=None)
 @click.option("--line-thickness", type=float, default=None)
 @click.option("--color-thickness", type=float, default=None)
-@click.option("--line-color-threshold", type=int, default=None)
 @click.option("--line-dilate-px", type=int, default=None)
 @click.option("--max-colors", type=int, default=None)
 @click.option("--hole-type", type=click.Choice(["round", "double", "slot", "none"]), default=None)
@@ -62,7 +61,7 @@ def _merge_cli_overrides(cfg: dict[str, Any], overrides: dict[str, Any]) -> dict
 def main(config_path: Path | None, input_image: Path | None, output_basename: str | None,
          output_dir: Path | None, target_size_mm: float | None, base_thickness: float | None,
          line_thickness: float | None, color_thickness: float | None,
-         line_color_threshold: int | None, line_dilate_px: int | None,
+         line_dilate_px: int | None,
          max_colors: int | None, hole_type: str | None, hole_diameter: float | None,
          hole_position: str | None, stop_after: str | None, verbose: bool | None) -> None:
 
@@ -84,7 +83,7 @@ def main(config_path: Path | None, input_image: Path | None, output_basename: st
         "input_image": input_image, "output_basename": output_basename,
         "output_dir": output_dir, "target_size_mm": target_size_mm,
         "base_thickness": base_thickness, "line_thickness": line_thickness,
-        "color_thickness": color_thickness, "line_color_threshold": line_color_threshold,
+        "color_thickness": color_thickness,
         "line_dilate_px": line_dilate_px, "max_colors": max_colors,
         "hole_type": hole_type, "hole_diameter": hole_diameter,
         "hole_position": hole_position, "verbose": verbose,
