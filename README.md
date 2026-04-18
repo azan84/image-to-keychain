@@ -119,20 +119,54 @@ ridge is what makes the outlines visually "pop" on the finished keychain.
 If you want flat lines (same height as colors), set them equal. If you want
 more dramatic outline emphasis, widen the gap.
 
+## The keychain tab
+
+By default the pipeline builds a **tab** — a rounded-rectangle lug that
+sticks out beyond the subject's silhouette and carries the keyring hole.
+This is what you want in practice: the hole never cuts into the subject
+itself. The subject's shape stays 100% intact.
+
+    ┌──────────┐         ┌──────────┐
+    │   ⭕tab  │         │ ⭕ tab   │   ← different tab_side
+    │     │    │         │ │        │
+    │  ┌──┴──┐ │         │ │┌──────┐│
+    │  │chibi│ │    vs   │ ├┤chibi ││
+    │  │subj │ │         │ ││subj  ││
+    │  └─────┘ │         │ │└──────┘│
+    └──────────┘         └──────────┘
+      tab_side=top          tab_side=left
+
+The base layer is `silhouette ∪ tab`; the tab is just more base
+material. The hole is subtracted from the whole base. Lines and color
+layers stay confined to the silhouette and never extend onto the tab,
+so the tab remains clean flat base-material (a single filament).
+
+Disable the tab with `tab_enabled: false` to fall back to the legacy
+"cut the hole into the silhouette" behavior. You'd typically only want
+that if you deliberately want to pierce the subject (e.g. a background
+plate where a hole in a corner is fine).
+
 ## Key config parameters
 
 | Parameter | Default | What it does |
 |---|---|---|
-| `target_size_mm` | 60 | Longest XY dimension of the subject (silhouette, not the full image). |
-| `base_thickness` | 2.0 | Thickness of the solid backing plate. |
+| `target_size_mm` | 60 | Longest XY dimension of the subject (silhouette, not the tab). |
+| `base_thickness` | 2.0 | Thickness of the solid backing plate (including the tab). |
 | `line_thickness` | 1.5 | Thickness of the line layer above the base. |
 | `color_thickness` | 1.0 | Thickness of each color part above the base. |
 | `max_colors` | 6 | k-means cluster count. AMS has 4 slots per unit. |
 | `line_dilate_px` | 2 | Grow boundary lines by N pixels before extruding. Bump to 3–4 if lines are too thin to print. |
+| **`tab_enabled`** | `true` | Build a tab that carries the hole. `false` → cut hole into silhouette. |
+| **`tab_side`** | `top` | `top` / `bottom` / `left` / `right` — which silhouette edge the tab attaches to. Plane-Y top, not Z. |
+| **`tab_position`** | 0.5 | 0..1 along the chosen side. 0.5 = centered, 0.0 = start, 1.0 = end. |
+| **`tab_width_mm`** | 12.0 | Tab span along the silhouette edge. |
+| **`tab_depth_mm`** | 8.0 | How far the tab extends outward. |
+| **`tab_corner_radius_mm`** | 2.5 | Rounded corners on the tab. |
+| **`tab_overlap_mm`** | 2.0 | How far the tab reaches into the silhouette so the union is one solid piece. Bump this if the silhouette edge is wispy (hair spikes etc.) and the tab looks disconnected. |
 | `hole_type` | `round` | `round` / `double` / `slot` / `none`. |
 | `hole_diameter` | 4.0 | For `round` / `double`. |
-| `hole_position` | `top-center` | 8 named positions + `custom` (with `hole_custom_offset`). |
-| `hole_edge_margin` | 3.0 | mm from silhouette edge to hole center. |
+| `hole_edge_margin` | 3.0 | Min distance from hole edge to tab outer edge. |
+| `hole_position` | `top-center` | Legacy, only used when `tab_enabled=false`. |
 
 ## In Bambu Studio
 
