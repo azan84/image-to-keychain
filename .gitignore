@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Pipeline outputs
+intermediate/
+out/
+*.3mf
+*.stl
+!examples/sample_output.3mf
+!examples/sample_output_parts/*.stl

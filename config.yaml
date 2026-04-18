@@ -1,0 +1,40 @@
+# image_to_keychain — default configuration
+# All parameters can be overridden via CLI flags.
+
+input_image: "../Keychain/Gemini_Generated_Image_k3zkqmk3zkqmk3zk.png"
+output_basename: "keychain"
+output_dir: "out"
+output_formats: ["3mf", "stl"]
+
+# Sizing (longest dimension of the final keychain, in mm)
+target_size_mm: 60
+
+# Thicknesses (mm) — independently configurable
+base_thickness: 2.0
+line_thickness: 1.5      # typically > color_thickness so lines pop visually
+color_thickness: 1.0
+
+# Keychain hole
+hole_type: "round"              # round | double | slot | none
+hole_diameter: 4.0
+hole_spacing: 6.0               # double only, center-to-center
+hole_slot_length: 8.0
+hole_slot_width: 4.0
+hole_position: "top-center"     # top-left | top-center | top-right | left-center | right-center | custom
+hole_custom_offset: [0, 0]      # mm from silhouette bounding-box top-left (x, y)
+hole_edge_margin: 3.0           # mm from silhouette edge to hole center
+
+# Vectorization
+vectorizer: "vtracer"           # vtracer | potrace
+simplify_tolerance: 0.5         # higher = fewer polygons
+line_color_threshold: 70        # RGB brightness below this = line art (0-255)
+line_dilate_px: 0               # optional 2D dilation of line mask before vectorizing
+max_colors: 6                   # k-means-cluster similar colors before vectorizing
+alpha_threshold: 128            # transparent background cutoff (0-255)
+
+# Quality
+mesh_resolution: "medium"       # low | medium | high — tessellation detail
+
+# Logging
+verbose: true
+save_intermediate: true         # write SVGs and preview PNGs to intermediate/

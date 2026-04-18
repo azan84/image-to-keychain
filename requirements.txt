@@ -1,0 +1,11 @@
+vtracer==0.6.15
+trimesh==4.11.5
+shapely>=2.0,<3.0
+manifold3d==3.4.1
+numpy>=1.26,<3.0
+pillow>=10.0
+pyyaml>=6.0
+click>=8.1
+svgelements==1.9.6
+svgpathtools==1.7.2
+lxml>=5.0
