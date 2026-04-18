@@ -14,15 +14,28 @@ base_thickness: 2.0
 line_thickness: 1.5      # typically > color_thickness so lines pop visually
 color_thickness: 1.0
 
-# Keychain hole
+# Keychain tab — a rounded-rectangle lug attached to one side of the
+# silhouette that carries the keyring hole. Prevents cutting into the
+# subject itself.
+tab_enabled: true
+tab_side: "top"                 # top | bottom | left | right (plane-Y top, not Z)
+tab_position: 0.5               # 0..1 along the side; 0.5 = centered
+tab_width_mm: 12.0              # span along the silhouette edge
+tab_depth_mm: 8.0               # how far the tab extends outward
+tab_corner_radius_mm: 2.5       # rounded corners
+tab_overlap_mm: 2.0             # how far the tab reaches into the silhouette
+
+# Keychain hole (sits inside the tab when tab_enabled=true)
 hole_type: "round"              # round | double | slot | none
 hole_diameter: 4.0
 hole_spacing: 6.0               # double only, center-to-center
 hole_slot_length: 8.0
 hole_slot_width: 4.0
+hole_edge_margin: 3.0           # mm from hole edge to tab outer edge
+
+# Used only when tab_enabled=false (legacy "hole cut into silhouette" mode)
 hole_position: "top-center"     # top-left | top-center | top-right | left-center | right-center | custom
 hole_custom_offset: [0, 0]      # mm from silhouette bounding-box top-left (x, y)
-hole_edge_margin: 3.0           # mm from silhouette edge to hole center
 
 # Vectorization
 vectorizer: "vtracer"           # vtracer | potrace

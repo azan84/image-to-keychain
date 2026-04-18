@@ -183,11 +183,13 @@ def build_parts(silhouette_mp: MultiPolygon,
                 hole_mp: MultiPolygon | None,
                 image_shape: tuple[int, int],
                 cfg: dict,
+                tab_mp: MultiPolygon | None = None,
                 verbose: bool = True) -> list[KeychainPart]:
-    """Build all keychain parts: base + lines + one per color cluster.
+    """Build all keychain parts: base (+tab) + lines + one per color cluster.
 
-    Applies px->mm transform uniformly, subtracts the hole polygon from
-    every layer, and extrudes.
+    Base polygon = silhouette \u222a tab  MINUS hole.
+    Lines and colors are clipped to the original silhouette so they never
+    extend onto the tab (tab should be flat base-material only).
     """
     log = get_logger(verbose=verbose)
     target_mm = float(cfg.get("target_size_mm", 60.0))
@@ -199,14 +201,25 @@ def build_parts(silhouette_mp: MultiPolygon,
     log.info("Steps 5-6: extruding parts (scale=%.5f mm/px, translate=(%.3f, %.3f))",
              xform["scale"], *xform["translate"])
     (minx, miny), (maxx, maxy) = xform["bounds_mm"]
-    log.info("  keychain XY bounds: (%.2f, %.2f) -> (%.2f, %.2f) mm", minx, miny, maxx, maxy)
+    log.info("  keychain XY bounds (subject only): (%.2f, %.2f) -> (%.2f, %.2f) mm",
+             minx, miny, maxx, maxy)
 
-    # Apply transform
+    # Apply transform. Tab already arrives in keychain-mm space (built by
+    # keyhole.build_tab_and_hole from the same bounds), so no transform.
     sil_mm = apply_transform(silhouette_mp, xform)
     lines_mm = apply_transform(lines_mp, xform) if not lines_mp.is_empty else MultiPolygon()
     color_polys_mm = [(cp, apply_transform(cp.polygon, xform)) for cp in colors]
 
-    # Subtract the hole polygon if any
+    # Merge silhouette and tab to form the base outline
+    if tab_mp is not None and not tab_mp.is_empty:
+        merged = unary_union([sil_mm, tab_mp])
+        base_outline = merged if merged.geom_type == "MultiPolygon" else MultiPolygon([merged])
+        bb = base_outline.bounds
+        log.info("  base outline with tab: (%.2f, %.2f) -> (%.2f, %.2f) mm",
+                 bb[0], bb[1], bb[2], bb[3])
+    else:
+        base_outline = sil_mm
+
     def sub_hole(p: MultiPolygon) -> MultiPolygon:
         if hole_mp is None or hole_mp.is_empty:
             return p
@@ -217,9 +230,9 @@ def build_parts(silhouette_mp: MultiPolygon,
             return result
         return MultiPolygon()
 
-    # Also clip the line and color layers to the silhouette so no geometry
-    # extends beyond the base plate.
-    def clip(p: MultiPolygon) -> MultiPolygon:
+    # Clip lines/colors to the ORIGINAL silhouette (not the base outline),
+    # so they don't extend onto the tab — tab should be flat base-material only.
+    def clip_to_silhouette(p: MultiPolygon) -> MultiPolygon:
         c = p.intersection(sil_mm)
         if c.geom_type == "Polygon":
             return MultiPolygon([c]) if not c.is_empty else MultiPolygon()
@@ -229,14 +242,16 @@ def build_parts(silhouette_mp: MultiPolygon,
 
     parts: list[KeychainPart] = []
 
-    # Base
-    base_poly = sub_hole(sil_mm)
+    # Base (silhouette \u222a tab, minus hole)
+    base_poly = sub_hole(base_outline)
     parts.append(KeychainPart(name="base", role="base", polygon=base_poly,
                               z_min=0.0, z_max=base_t, rgb=None))
 
-    # Lines
+    # Lines — no hole subtraction needed when hole is inside the tab,
+    # because lines are clipped to the silhouette (which doesn't contain
+    # the hole). Subtract anyway for the tab_enabled=false legacy path.
     if not lines_mm.is_empty:
-        lp = clip(sub_hole(lines_mm))
+        lp = clip_to_silhouette(sub_hole(lines_mm))
         if not lp.is_empty:
             parts.append(KeychainPart(name="lines", role="lines", polygon=lp,
                                       z_min=base_t, z_max=base_t + line_t,
@@ -244,7 +259,7 @@ def build_parts(silhouette_mp: MultiPolygon,
 
     # Colors
     for cp, poly_mm in color_polys_mm:
-        clipped = clip(sub_hole(poly_mm))
+        clipped = clip_to_silhouette(sub_hole(poly_mm))
         if clipped.is_empty:
             log.warning("  color %s clipped to empty — skipping", cp.safe_name)
             continue

@@ -26,7 +26,7 @@ from pipeline.extract_lines import extract_lines
 from pipeline.export_3mf import export_3mf
 from pipeline.export_stl import export_stl_parts
 from pipeline.extrude import build_parts, compute_px_to_mm
-from pipeline.keyhole import build_keyhole
+from pipeline.keyhole import build_tab_and_hole
 from pipeline.preprocess import preprocess
 from pipeline.silhouette import build_silhouette
 from pipeline.util import describe_config, ensure_dir, get_logger
@@ -61,7 +61,15 @@ def _merge_cli_overrides(cfg: dict[str, Any], overrides: dict[str, Any]) -> dict
 @click.option("--max-colors", type=int, default=None)
 @click.option("--hole-type", type=click.Choice(["round", "double", "slot", "none"]), default=None)
 @click.option("--hole-diameter", type=float, default=None)
-@click.option("--hole-position", type=str, default=None)
+@click.option("--hole-position", type=str, default=None,
+              help="Legacy: hole location on silhouette when --no-tab is used.")
+@click.option("--tab/--no-tab", "tab_enabled", default=None,
+              help="Add an extended tab that carries the hole (default true).")
+@click.option("--tab-side", type=click.Choice(["top", "bottom", "left", "right"]), default=None)
+@click.option("--tab-position", type=float, default=None,
+              help="0..1 along the chosen silhouette side.")
+@click.option("--tab-width-mm", type=float, default=None)
+@click.option("--tab-depth-mm", type=float, default=None)
 @click.option("--stop-after", type=click.Choice(["vectorize", "lines", "colors", "silhouette",
                                                  "extrude", "hole", "export"]),
               default=None, help="Stop pipeline after this stage (for debugging).")
@@ -71,6 +79,8 @@ def main(config_path: Path | None, input_image: Path | None, output_basename: st
          line_thickness: float | None, color_thickness: float | None,
          line_dilate_px: int | None, max_colors: int | None,
          hole_type: str | None, hole_diameter: float | None, hole_position: str | None,
+         tab_enabled: bool | None, tab_side: str | None, tab_position: float | None,
+         tab_width_mm: float | None, tab_depth_mm: float | None,
          stop_after: str | None, verbose: bool | None) -> None:
 
     script_dir = Path(__file__).parent.resolve()
@@ -94,7 +104,10 @@ def main(config_path: Path | None, input_image: Path | None, output_basename: st
         "color_thickness": color_thickness,
         "line_dilate_px": line_dilate_px, "max_colors": max_colors,
         "hole_type": hole_type, "hole_diameter": hole_diameter,
-        "hole_position": hole_position, "verbose": verbose,
+        "hole_position": hole_position, "tab_enabled": tab_enabled,
+        "tab_side": tab_side, "tab_position": tab_position,
+        "tab_width_mm": tab_width_mm, "tab_depth_mm": tab_depth_mm,
+        "verbose": verbose,
     }
     cfg = _merge_cli_overrides(cfg, overrides)
 
@@ -143,9 +156,9 @@ def main(config_path: Path | None, input_image: Path | None, output_basename: st
     if stop_after == "silhouette":
         return
 
-    # --- Step 7 prep: hole polygon in mm -----------------------------------
+    # --- Step 7 prep: tab + hole polygons in mm ----------------------------
     xform = compute_px_to_mm(sil.image_shape, float(cfg["target_size_mm"]), sil.polygon)
-    hole_mp = build_keyhole(xform["bounds_mm"], cfg, verbose=bool(cfg.get("verbose", True)))
+    th = build_tab_and_hole(xform["bounds_mm"], cfg, verbose=bool(cfg.get("verbose", True)))
     if stop_after == "hole":
         return
 
@@ -154,7 +167,8 @@ def main(config_path: Path | None, input_image: Path | None, output_basename: st
         silhouette_mp=sil.polygon,
         lines_mp=lines.polygon,
         colors=colors,
-        hole_mp=hole_mp,
+        hole_mp=th.hole,
+        tab_mp=th.tab,
         image_shape=sil.image_shape,
         cfg=cfg,
         verbose=bool(cfg.get("verbose", True)),
