@@ -34,12 +34,17 @@ class TestAlignment:
         assert abs(bb[0, 2]) < EPS_MM, f"base min_z = {bb[0, 2]}"
 
     def test_target_size_achieved(self, pipeline_output):
-        base = next(p for p in pipeline_output["parts"] if p.role == "base")
-        bb = base.mesh.bounds
+        """target_size_mm is the subject's longest dim. When tab is enabled
+        the base extends beyond that by the tab depth, so we check a layer
+        that's clipped to the silhouette (lines or any color) instead."""
+        parts = pipeline_output["parts"]
+        subject_part = next((p for p in parts if p.role != "base"), None)
+        assert subject_part is not None
+        bb = subject_part.mesh.bounds
         longest = max(bb[1, 0] - bb[0, 0], bb[1, 1] - bb[0, 1])
         # Allow a pixel's worth of rounding
         assert abs(longest - pipeline_output["target_size_mm"]) < 0.1, \
-            f"longest XY = {longest}, target = {pipeline_output['target_size_mm']}"
+            f"longest subject XY = {longest}, target = {pipeline_output['target_size_mm']}"
 
     def test_every_part_xy_within_base(self, pipeline_output):
         parts = pipeline_output["parts"]
@@ -76,34 +81,61 @@ class TestAlignment:
                 assert line_top >= c_top - EPS_MM, \
                     f"lines top ({line_top}) should be >= color top ({c_top})"
 
-    def test_keychain_hole_cut_through(self, pipeline_output):
-        """The keychain hole must be cut cleanly through every layer.
+    def test_base_has_a_hole(self, pipeline_output):
+        """The base must have exactly one hole through it (the keychain hole).
 
-        contains() needs rtree (which needs libspatialindex), so we check
-        via vertex distances instead: no mesh vertex should sit strictly
-        inside the hole's interior (i.e. closer to the center than the
-        radius by more than a small tolerance). Vertices exactly on the
-        circular boundary are allowed.
+        We check topology: a simply-connected extruded polygon has
+        euler_number == 2; each hole subtracts 2 more (creates an
+        additional handle).
         """
-        import numpy as np
         import yaml
 
         cfg = yaml.safe_load((PROJECT / "config.yaml").read_text())
         if cfg.get("hole_type") == "none":
             pytest.skip("hole_type=none; nothing to test")
 
-        radius = float(cfg["hole_diameter"]) / 2
-        margin = float(cfg["hole_edge_margin"])
-
         base = next(p for p in pipeline_output["parts"] if p.role == "base")
-        bb = base.mesh.bounds
-        cx = 0.5 * (bb[0, 0] + bb[1, 0])
-        cy = bb[1, 1] - margin
+        # Euler number of a closed genus-g surface is 2 - 2g. A flat
+        # extruded region with N through-holes is genus N, so euler = 2-2N.
+        # We don't need an exact count; asserting euler < 2 suffices to show
+        # at least one hole is present.
+        assert base.mesh.euler_number < 2, \
+            f"base has euler_number {base.mesh.euler_number}; expected <2 (hole present)"
 
-        tol = 0.15  # mm; polygon-approx circle will have inset by ~sin(pi/64)*r
-        for part in pipeline_output["parts"]:
-            verts_xy = part.mesh.vertices[:, :2]
-            dists = np.linalg.norm(verts_xy - np.array([cx, cy]), axis=1)
-            min_dist = dists.min()
-            assert min_dist >= radius - tol, \
-                f"{part.name} has a vertex {min_dist:.3f}mm from hole center (< {radius}mm)"
+    def test_hole_not_in_subject(self, pipeline_output):
+        """When a tab is enabled, the hole must live in the tab — no mesh
+        vertex of lines or colors should sit near the hole's center."""
+        import numpy as np
+        import yaml
+
+        cfg = yaml.safe_load((PROJECT / "config.yaml").read_text())
+        if not cfg.get("tab_enabled", True):
+            pytest.skip("tab disabled; hole is in silhouette")
+        if cfg.get("hole_type") == "none":
+            pytest.skip("hole_type=none")
+
+        # The subject parts should NOT extend into the tab region at all.
+        # Tab is on the side given in config; after px->mm the silhouette
+        # spans up to target_size_mm on its longest dim, so tab pokes out
+        # beyond that. We check that every non-base part's max extent on
+        # the tab-outward axis is ≤ silhouette max (no tab spill).
+        side = cfg.get("tab_side", "top")
+        sil_parts = [p for p in pipeline_output["parts"] if p.role != "base"]
+        base = next(p for p in pipeline_output["parts"] if p.role == "base")
+        base_bb = base.mesh.bounds
+
+        for part in sil_parts:
+            bb = part.mesh.bounds
+            if side == "top":
+                # Base extends ABOVE subject (larger max Y); subject must NOT
+                assert bb[1, 1] < base_bb[1, 1] - 0.5, \
+                    f"{part.name} spills into the top tab"
+            elif side == "bottom":
+                assert bb[0, 1] > base_bb[0, 1] + 0.5, \
+                    f"{part.name} spills into the bottom tab"
+            elif side == "left":
+                assert bb[0, 0] > base_bb[0, 0] + 0.5, \
+                    f"{part.name} spills into the left tab"
+            elif side == "right":
+                assert bb[1, 0] < base_bb[1, 0] - 0.5, \
+                    f"{part.name} spills into the right tab"

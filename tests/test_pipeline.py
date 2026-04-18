@@ -33,7 +33,7 @@ def pipeline_output(tmp_path_factory) -> dict:
     from pipeline.export_3mf import export_3mf
     from pipeline.export_stl import export_stl_parts
     from pipeline.extrude import build_parts, compute_px_to_mm
-    from pipeline.keyhole import build_keyhole
+    from pipeline.keyhole import build_tab_and_hole
     from pipeline.preprocess import preprocess
     from pipeline.silhouette import build_silhouette
 
@@ -49,9 +49,9 @@ def pipeline_output(tmp_path_factory) -> dict:
     colors = extract_colors(pre, inter_dir, verbose=False)
     sil = build_silhouette(pre, inter_dir, verbose=False)
     xform = compute_px_to_mm(sil.image_shape, float(cfg["target_size_mm"]), sil.polygon)
-    hole = build_keyhole(xform["bounds_mm"], cfg, verbose=False)
-    parts = build_parts(sil.polygon, lines.polygon, colors, hole,
-                        sil.image_shape, cfg, verbose=False)
+    th = build_tab_and_hole(xform["bounds_mm"], cfg, verbose=False)
+    parts = build_parts(sil.polygon, lines.polygon, colors, th.hole,
+                        sil.image_shape, cfg, tab_mp=th.tab, verbose=False)
 
     export_stl_parts(parts, out_dir, "test_keychain", verbose=False)
     export_3mf(parts, out_dir, "test_keychain", verbose=False)
