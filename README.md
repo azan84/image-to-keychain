@@ -121,28 +121,27 @@ more dramatic outline emphasis, widen the gap.
 
 ## The keychain tab
 
-By default the pipeline builds a **tab** — a rounded-rectangle lug that
-sticks out beyond the subject's silhouette and carries the keyring hole.
-This is what you want in practice: the hole never cuts into the subject
-itself. The subject's shape stays 100% intact.
+By default the pipeline builds a **tab** — a rounded-rectangle lug with
+the keyring hole cut through it. The tab is exported as its **own
+separate object** in the 3MF, aligned in XY/Z with the base but not
+merged to it. The subject's own silhouette stays 100% intact; no hole
+is cut into it.
 
-    ┌──────────┐         ┌──────────┐
-    │   ⭕tab  │         │ ⭕ tab   │   ← different tab_side
-    │     │    │         │ │        │
-    │  ┌──┴──┐ │         │ │┌──────┐│
-    │  │chibi│ │    vs   │ ├┤chibi ││
-    │  │subj │ │         │ ││subj  ││
-    │  └─────┘ │         │ │└──────┘│
-    └──────────┘         └──────────┘
-      tab_side=top          tab_side=left
+    ┌──────────┐
+    │   ⭕tab  │   ← separate object
+    │
+    │  ┌─────┐
+    │  │chibi│     ← base + lines + colors, no hole anywhere
+    │  │subj │
+    │  └─────┘
 
-The base layer is `silhouette ∪ tab`; the tab is just more base
-material. The hole is subtracted from the whole base. Lines and color
-layers stay confined to the silhouette and never extend onto the tab,
-so the tab remains clean flat base-material (a single filament).
+In Bambu Studio you can drag the tab to overlap the subject wherever
+you want, then right-click → **Assemble** (or just keep them as two
+parts printed together). Both tab and base are at the same Z range so
+they share the build plate at the same level.
 
-Disable the tab with `tab_enabled: false` to fall back to the legacy
-"cut the hole into the silhouette" behavior. You'd typically only want
+Set `tab_enabled: false` to fall back to the legacy "cut the hole
+directly into the silhouette" behavior — you'd typically only want
 that if you deliberately want to pierce the subject (e.g. a background
 plate where a hole in a corner is fine).
 

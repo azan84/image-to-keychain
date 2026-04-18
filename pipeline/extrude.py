@@ -210,15 +210,7 @@ def build_parts(silhouette_mp: MultiPolygon,
     lines_mm = apply_transform(lines_mp, xform) if not lines_mp.is_empty else MultiPolygon()
     color_polys_mm = [(cp, apply_transform(cp.polygon, xform)) for cp in colors]
 
-    # Merge silhouette and tab to form the base outline
-    if tab_mp is not None and not tab_mp.is_empty:
-        merged = unary_union([sil_mm, tab_mp])
-        base_outline = merged if merged.geom_type == "MultiPolygon" else MultiPolygon([merged])
-        bb = base_outline.bounds
-        log.info("  base outline with tab: (%.2f, %.2f) -> (%.2f, %.2f) mm",
-                 bb[0], bb[1], bb[2], bb[3])
-    else:
-        base_outline = sil_mm
+    has_tab = tab_mp is not None and not tab_mp.is_empty
 
     def sub_hole(p: MultiPolygon) -> MultiPolygon:
         if hole_mp is None or hole_mp.is_empty:
@@ -230,8 +222,6 @@ def build_parts(silhouette_mp: MultiPolygon,
             return result
         return MultiPolygon()
 
-    # Clip lines/colors to the ORIGINAL silhouette (not the base outline),
-    # so they don't extend onto the tab — tab should be flat base-material only.
     def clip_to_silhouette(p: MultiPolygon) -> MultiPolygon:
         c = p.intersection(sil_mm)
         if c.geom_type == "Polygon":
@@ -242,16 +232,33 @@ def build_parts(silhouette_mp: MultiPolygon,
 
     parts: list[KeychainPart] = []
 
-    # Base (silhouette \u222a tab, minus hole)
-    base_poly = sub_hole(base_outline)
+    # Base = silhouette only. With a tab, the base does NOT get the hole
+    # subtracted — the tab is a separate object and carries the hole.
+    # Without a tab, subtract the hole from the base (legacy behavior).
+    if has_tab:
+        base_poly = sil_mm
+    else:
+        base_poly = sub_hole(sil_mm)
     parts.append(KeychainPart(name="base", role="base", polygon=base_poly,
                               z_min=0.0, z_max=base_t, rgb=None))
 
-    # Lines — no hole subtraction needed when hole is inside the tab,
-    # because lines are clipped to the silhouette (which doesn't contain
-    # the hole). Subtract anyway for the tab_enabled=false legacy path.
+    # Tab — separate part with its own hole. Same thickness as the base
+    # so the user can weld them together in the slicer.
+    if has_tab:
+        tab_poly = sub_hole(tab_mp)
+        if not tab_poly.is_empty:
+            parts.append(KeychainPart(
+                name="tab", role="tab", polygon=tab_poly,
+                z_min=0.0, z_max=base_t, rgb=None,
+            ))
+            bb = tab_poly.bounds
+            log.info("  tab (separate part) bounds: (%.2f, %.2f) -> (%.2f, %.2f) mm",
+                     bb[0], bb[1], bb[2], bb[3])
+
+    # Lines — clipped to silhouette so they never land on the tab. When the
+    # tab carries the hole, no sub_hole call is needed here.
     if not lines_mm.is_empty:
-        lp = clip_to_silhouette(sub_hole(lines_mm))
+        lp = clip_to_silhouette(lines_mm if has_tab else sub_hole(lines_mm))
         if not lp.is_empty:
             parts.append(KeychainPart(name="lines", role="lines", polygon=lp,
                                       z_min=base_t, z_max=base_t + line_t,
@@ -259,7 +266,8 @@ def build_parts(silhouette_mp: MultiPolygon,
 
     # Colors
     for cp, poly_mm in color_polys_mm:
-        clipped = clip_to_silhouette(sub_hole(poly_mm))
+        poly_to_use = poly_mm if has_tab else sub_hole(poly_mm)
+        clipped = clip_to_silhouette(poly_to_use)
         if clipped.is_empty:
             log.warning("  color %s clipped to empty — skipping", cp.safe_name)
             continue
