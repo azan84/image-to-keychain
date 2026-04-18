@@ -9,3 +9,6 @@ click>=8.1
 svgelements==1.9.6
 svgpathtools==1.7.2
 lxml>=5.0
+
+# Optional — only needed for app.py (Gradio web UI)
+gradio>=5.0

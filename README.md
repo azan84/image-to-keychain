@@ -53,7 +53,31 @@ sudo apt-get install -y libspatialindex-dev   # enables rtree, used by trimesh
 The pipeline itself does **not** require `rtree` — it uses `manifold3d` for
 boolean operations and writes polygons via `svgpathtools`.
 
-## Quick start
+## Web UI (recommended)
+
+Drop any PNG into a browser-based UI, tweak sliders with live preview,
+download the 3MF. No folder dance, no editing YAML.
+
+```bash
+python3 app.py
+```
+
+Then open <http://localhost:7860>. On Windows, you can also just
+double-click `launch_ui.bat` — it boots the server in WSL and opens
+the URL for you.
+
+- Drag or paste your PNG into the upload zone (anywhere on disk).
+- The right panel shows a top-down preview that updates whenever you
+  release a slider.
+- Click **Generate 3MF + STL** to run the full pipeline and download the
+  output files (3MF for Bambu Studio, zip of per-part STLs for any
+  slicer).
+
+The first preview/export on a new image takes a few seconds (k-means +
+vectorization). Subsequent slider tweaks on the same image are instant
+because image-dependent state is cached.
+
+## Quick start (CLI)
 
 ```bash
 # 1. Put your input PNG somewhere.

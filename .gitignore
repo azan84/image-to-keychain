@@ -7,7 +7,9 @@ venv/
 
 # Pipeline outputs
 intermediate/
+intermediate_ui/
 out/
+out_ui/
 *.3mf
 *.stl
 !examples/sample_output.3mf
