@@ -22,7 +22,7 @@ from .util import get_logger
 
 
 def _circle(cx: float, cy: float, radius: float, segments: int = 64) -> Polygon:
-    return Point(cx, cy).buffer(radius, resolution=segments // 4)
+    return Point(cx, cy).buffer(radius, quad_segs=segments // 4)
 
 
 def _slot(cx: float, cy: float, length: float, width: float, segments: int = 64) -> Polygon:

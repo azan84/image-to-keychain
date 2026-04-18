@@ -50,18 +50,22 @@ def compute_px_to_mm(image_shape: tuple[int, int], target_size_mm: float,
                      silhouette_poly_px: MultiPolygon) -> dict:
     """Return a transform descriptor: scale (mm/px), translate (mm) so that
     the silhouette's bbox lower-left sits at (0, 0). Y is already flipped
-    upstream (silhouette is in math-convention px-space with Y up)."""
-    H, W = image_shape
-    scale = target_size_mm / max(W, H)
+    upstream (silhouette is in math-convention px-space with Y up).
+
+    target_size_mm is applied to the silhouette's longest dimension, not
+    the raw image dimension — so a subject that doesn't fill the canvas
+    still comes out at the requested keychain size.
+    """
     minx, miny, maxx, maxy = silhouette_poly_px.bounds
-    # Apply scale first, then translate to put min at origin
+    subj_w = max(1.0, maxx - minx)
+    subj_h = max(1.0, maxy - miny)
+    scale = target_size_mm / max(subj_w, subj_h)
     tx = -minx * scale
     ty = -miny * scale
     return {
         "scale": scale,
         "translate": (tx, ty),
-        "bounds_mm": ((0.0, 0.0),
-                      ((maxx - minx) * scale, (maxy - miny) * scale)),
+        "bounds_mm": ((0.0, 0.0), (subj_w * scale, subj_h * scale)),
     }
 
 
