@@ -190,7 +190,24 @@ def svg_to_multipolygon(svg_path: Path, flip_y_height: float | None = None,
         else:
             out_polys.append(p)
 
-    return MultiPolygon(out_polys) if out_polys else MultiPolygon()
+    if not out_polys:
+        return MultiPolygon()
+    # Final validity pass — some vtracer outputs contain near-touching edges
+    # that pass Polygon.is_valid but still trip GEOS in downstream booleans.
+    # buffer(0) is the standard heal; make_valid catches anything left.
+    mp = MultiPolygon(out_polys)
+    if not mp.is_valid:
+        mp = make_valid(mp)
+    clean = mp.buffer(0)
+    if clean.is_empty:
+        return MultiPolygon()
+    if clean.geom_type == "Polygon":
+        return MultiPolygon([clean])
+    if clean.geom_type == "MultiPolygon":
+        return clean
+    # GeometryCollection — keep only the Polygon parts
+    keep = [g for g in getattr(clean, "geoms", []) if g.geom_type == "Polygon" and not g.is_empty]
+    return MultiPolygon(keep) if keep else MultiPolygon()
 
 
 def mask_to_multipolygon(mask: np.ndarray, tmp_dir: Path, tag: str,

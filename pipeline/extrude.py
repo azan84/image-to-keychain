@@ -212,23 +212,49 @@ def build_parts(silhouette_mp: MultiPolygon,
 
     has_tab = tab_mp is not None and not tab_mp.is_empty
 
+    def _to_mp(g) -> MultiPolygon:
+        if g is None or g.is_empty:
+            return MultiPolygon()
+        if g.geom_type == "Polygon":
+            return MultiPolygon([g])
+        if g.geom_type == "MultiPolygon":
+            return g
+        # GeometryCollection — keep polygons only
+        polys = [x for x in getattr(g, "geoms", [])
+                 if x.geom_type == "Polygon" and not x.is_empty]
+        return MultiPolygon(polys)
+
+    def _safe_boolean(op_name: str, a: MultiPolygon, b: MultiPolygon) -> MultiPolygon:
+        """Run a shapely boolean with buffer(0) / make_valid fallbacks.
+        Some vtracer-derived polygons have sub-pixel self-touches that GEOS
+        rejects ("side location conflict") even though is_valid returns True."""
+        op = {"intersection": lambda x, y: x.intersection(y),
+              "difference":   lambda x, y: x.difference(y)}[op_name]
+        try:
+            return _to_mp(op(a, b))
+        except Exception:
+            pass
+        # Heal both operands and retry
+        a2 = a.buffer(0) if not a.is_empty else a
+        b2 = b.buffer(0) if not b.is_empty else b
+        try:
+            return _to_mp(op(a2, b2))
+        except Exception:
+            pass
+        # Last resort — make_valid (expensive)
+        try:
+            return _to_mp(op(make_valid(a2), make_valid(b2)))
+        except Exception as e:
+            log.warning("  %s failed after heal attempts: %s", op_name, e)
+            return MultiPolygon()
+
     def sub_hole(p: MultiPolygon) -> MultiPolygon:
         if hole_mp is None or hole_mp.is_empty:
             return p
-        result = p.difference(hole_mp)
-        if result.geom_type == "Polygon":
-            return MultiPolygon([result]) if not result.is_empty else MultiPolygon()
-        if result.geom_type == "MultiPolygon":
-            return result
-        return MultiPolygon()
+        return _safe_boolean("difference", p, hole_mp)
 
     def clip_to_silhouette(p: MultiPolygon) -> MultiPolygon:
-        c = p.intersection(sil_mm)
-        if c.geom_type == "Polygon":
-            return MultiPolygon([c]) if not c.is_empty else MultiPolygon()
-        if c.geom_type == "MultiPolygon":
-            return c
-        return MultiPolygon()
+        return _safe_boolean("intersection", p, sil_mm)
 
     parts: list[KeychainPart] = []
 
