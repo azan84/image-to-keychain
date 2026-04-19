@@ -62,9 +62,15 @@ download the 3MF. No folder dance, no editing YAML.
 python3 app.py
 ```
 
-Then open <http://localhost:7860>. On Windows, you can also just
-double-click `launch_ui.bat` — it boots the server in WSL and opens
-the URL for you.
+Then open <http://localhost:7860>.
+
+**Shortcuts** — double-clickable launchers that handle setup for you:
+
+- **Windows** — `launch_ui.bat` (runs the server in WSL, opens your browser).
+- **macOS** — `launch_ui.command` (creates a `.venv`, installs deps on
+  first run, opens your browser). On first launch Gatekeeper may block
+  it — right-click → Open once, then it's one-click forever.
+- **Linux** — `python3 app.py` from a terminal. No launcher needed.
 
 - Drag or paste your PNG into the upload zone (anywhere on disk).
 - The right panel shows a top-down preview that updates whenever you
