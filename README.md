@@ -68,8 +68,15 @@ Then open <http://localhost:7860>.
 
 - **Windows** — `launch_ui.bat` (runs the server in WSL, opens your browser).
 - **macOS** — `launch_ui.command` (creates a `.venv`, installs deps on
-  first run, opens your browser). On first launch Gatekeeper may block
-  it — right-click → Open once, then it's one-click forever.
+  first run, opens your browser). If Gatekeeper blocks it on the first
+  launch:
+  - **macOS 14 and older**: right-click → **Open** → confirm once.
+  - **macOS 15 Sequoia+**: the right-click trick was removed. Go to
+    **System Settings → Privacy & Security**, scroll down, click
+    **Open Anyway** next to the blocked-file notice.
+  - **Or, one line in Terminal**: `xattr -d com.apple.quarantine launch_ui.command`
+  
+  After any of these once, every future double-click just works.
 - **Linux** — `python3 app.py` from a terminal. No launcher needed.
 
 - Drag or paste your PNG into the upload zone (anywhere on disk).
