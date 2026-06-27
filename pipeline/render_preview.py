@@ -28,13 +28,16 @@ def render_topdown(sil_mm: MultiPolygon,
                    hole_mm: MultiPolygon,
                    bounds_mm: tuple[tuple[float, float], tuple[float, float]],
                    ppmm: int = 10,
-                   margin_px: int = 20) -> Image.Image:
-    """Render a PIL Image showing base + tab + colors + lines + hole position.
+                   margin_px: int = 20,
+                   text_label=None) -> Image.Image:
+    """Render a PIL Image showing base + tab + colors + lines + hole position,
+    plus the optional wording plate below the subject.
 
     `color_parts` is a sequence of tuples (mm_polygon, rgb) — already in
     keychain-mm space.
     `bounds_mm` is the (min, max) bounds to use for the canvas. Should
-    include both silhouette and tab so nothing is clipped.
+    include the silhouette, tab and wording plate so nothing is clipped.
+    `text_label` is an optional TextLabel (mm coords) drawn last.
     """
     (mn_x, mn_y), (mx_x, mx_y) = bounds_mm
     W = int((mx_x - mn_x) * ppmm) + 2 * margin_px
@@ -70,5 +73,10 @@ def render_topdown(sil_mm: MultiPolygon,
         for p in hole_mm.geoms:
             pts = [to_px(x, y) for x, y in p.exterior.coords]
             draw.polygon(pts, fill=_BG, outline=(230, 60, 60), width=3)
+
+    # Wording plate (below the subject): plate strip then the letters.
+    if text_label is not None and not text_label.is_empty:
+        draw_mp(text_label.plate, (*text_label.plate_color, 255))
+        draw_mp(text_label.glyphs, (*text_label.text_color, 255))
 
     return img

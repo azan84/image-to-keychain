@@ -29,6 +29,7 @@ from pipeline.extrude import build_parts, compute_px_to_mm
 from pipeline.keyhole import build_tab_and_hole
 from pipeline.preprocess import preprocess
 from pipeline.silhouette import build_silhouette
+from pipeline.text_label import build_text_label
 from pipeline.util import describe_config, ensure_dir, get_logger
 from pipeline.vectorize import vectorize
 
@@ -70,6 +71,15 @@ def _merge_cli_overrides(cfg: dict[str, Any], overrides: dict[str, Any]) -> dict
               help="0..1 along the chosen silhouette side.")
 @click.option("--tab-width-mm", type=float, default=None)
 @click.option("--tab-depth-mm", type=float, default=None)
+@click.option("--text", "text_string", type=str, default=None,
+              help="Wording for a name plate below the image (enables the plate).")
+@click.option("--text-font", type=str, default=None,
+              help="Font for the wording: a .ttf path or family name (default Arial Bold).")
+@click.option("--text-height-mm", type=float, default=None, help="Letter height (mm).")
+@click.option("--text-thickness-mm", type=float, default=None,
+              help="How far raised letters rise above the plate (mm).")
+@click.option("--text-recessed/--text-raised", "text_recessed", default=None,
+              help="Engrave the letters into the plate instead of raising them.")
 @click.option("--stop-after", type=click.Choice(["vectorize", "lines", "colors", "silhouette",
                                                  "extrude", "hole", "export"]),
               default=None, help="Stop pipeline after this stage (for debugging).")
@@ -81,6 +91,8 @@ def main(config_path: Path | None, input_image: Path | None, output_basename: st
          hole_type: str | None, hole_diameter: float | None, hole_position: str | None,
          tab_enabled: bool | None, tab_side: str | None, tab_position: float | None,
          tab_width_mm: float | None, tab_depth_mm: float | None,
+         text_string: str | None, text_font: str | None, text_height_mm: float | None,
+         text_thickness_mm: float | None, text_recessed: bool | None,
          stop_after: str | None, verbose: bool | None) -> None:
 
     script_dir = Path(__file__).parent.resolve()
@@ -107,9 +119,15 @@ def main(config_path: Path | None, input_image: Path | None, output_basename: st
         "hole_position": hole_position, "tab_enabled": tab_enabled,
         "tab_side": tab_side, "tab_position": tab_position,
         "tab_width_mm": tab_width_mm, "tab_depth_mm": tab_depth_mm,
+        "text_string": text_string, "text_font": text_font,
+        "text_height_mm": text_height_mm, "text_thickness_mm": text_thickness_mm,
+        "text_recessed": text_recessed,
         "verbose": verbose,
     }
     cfg = _merge_cli_overrides(cfg, overrides)
+    # Passing --text on the CLI implies enabling the wording plate.
+    if text_string is not None:
+        cfg["text_enabled"] = True
 
     log = get_logger(verbose=bool(cfg.get("verbose", True)))
     log.info("image_to_keychain pipeline starting")
@@ -162,6 +180,16 @@ def main(config_path: Path | None, input_image: Path | None, output_basename: st
     if stop_after == "hole":
         return
 
+    # --- Step 8: wording plate (optional) ----------------------------------
+    # Place the plate below whichever is lower: the silhouette bottom or a
+    # bottom-side tab, so the two never collide.
+    (bx0, by0), (bx1, by1) = xform["bounds_mm"]
+    bottom_y = by0
+    if not th.tab.is_empty:
+        bottom_y = min(bottom_y, th.tab.bounds[1])
+    text_label = build_text_label(xform["bounds_mm"], cfg, intermediate_dir,
+                                  bottom_y=bottom_y, verbose=bool(cfg.get("verbose", True)))
+
     # --- Steps 5 + 6: extrude ----------------------------------------------
     parts = build_parts(
         silhouette_mp=sil.polygon,
@@ -169,6 +197,7 @@ def main(config_path: Path | None, input_image: Path | None, output_basename: st
         colors=colors,
         hole_mp=th.hole,
         tab_mp=th.tab,
+        text_label=text_label,
         image_shape=sil.image_shape,
         cfg=cfg,
         verbose=bool(cfg.get("verbose", True)),

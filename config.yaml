@@ -37,6 +37,27 @@ hole_edge_margin: 3.0           # mm from hole edge to tab outer edge
 hole_position: "top-center"     # top-left | top-center | top-right | left-center | right-center | custom
 hole_custom_offset: [0, 0]      # mm from silhouette bounding-box top-left (x, y)
 
+# Wording plate — a rounded-rectangle name strip placed below the image with
+# raised letters on top. Exported as two separate bodies (text_plate + text)
+# so you assign a contrasting filament and weld them onto the keychain in
+# Bambu Studio.
+text_enabled: false             # set true (or pass --text "NAME") to add wording
+text_string: "NAME"             # the wording; use \n for multiple lines
+text_font: ""                   # .ttf path or family name; "" = bold sans default
+                                # (Arial Bold on Windows; DejaVu Sans Bold on Linux).
+                                # "disney" works if you drop waltographUI.ttf into
+                                # ./fonts locally (personal-use font, not shipped).
+text_height_mm: 8.0             # letter height (mm)
+text_thickness_mm: 1.0          # how far raised letters rise above the plate
+text_plate_thickness_mm:        # plate thickness (mm); blank = base_thickness
+text_margin_mm: 1.5             # gap between the image bottom and the plate top
+text_padding_mm: 3.0            # padding around the wording inside the plate
+text_corner_radius_mm: 2.0      # plate rounded-corner radius
+text_letter_spacing: 0.0        # extra tracking as a fraction of letter size
+text_recessed: false            # true = engrave letters instead of raising them
+text_color: [25, 25, 25]        # filament hint for the letters (RGB)
+text_plate_color: [230, 230, 230]  # filament hint for the plate (RGB)
+
 # Vectorization
 vectorizer: "vtracer"           # vtracer | potrace
 simplify_tolerance: 0.5         # higher = fewer polygons

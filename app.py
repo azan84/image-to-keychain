@@ -34,6 +34,7 @@ from pipeline.keyhole import build_tab_and_hole
 from pipeline.preprocess import preprocess
 from pipeline.render_preview import render_topdown
 from pipeline.silhouette import build_silhouette
+from pipeline.text_label import build_text_label
 
 
 HERE = Path(__file__).parent.resolve()
@@ -91,7 +92,10 @@ def _collect_cfg(target_size_mm, base_t, line_t, color_t, max_colors, line_dilat
                  tab_enabled, tab_side, tab_position, tab_width, tab_depth,
                  tab_corner_r, tab_overlap,
                  hole_type, hole_diameter, hole_edge_margin,
-                 hole_spacing, hole_slot_length, hole_slot_width):
+                 hole_spacing, hole_slot_length, hole_slot_width,
+                 text_enabled, text_string, text_font_file, text_font_name,
+                 text_height, text_thickness, text_recessed, text_margin,
+                 text_letter_spacing):
     return {
         "target_size_mm": float(target_size_mm),
         "base_thickness": float(base_t),
@@ -121,8 +125,36 @@ def _collect_cfg(target_size_mm, base_t, line_t, color_t, max_colors, line_dilat
         "hole_slot_width": float(hole_slot_width),
         "hole_position": "top-center",
         "hole_custom_offset": [0, 0],
+        # Wording plate. An uploaded .ttf (text_font_file) wins over a typed
+        # font name; empty falls back to Arial Bold inside the pipeline.
+        "text_enabled": bool(text_enabled),
+        "text_string": str(text_string or ""),
+        "text_font": (text_font_file or text_font_name or ""),
+        "text_height_mm": float(text_height),
+        "text_thickness_mm": float(text_thickness),
+        "text_recessed": bool(text_recessed),
+        "text_margin_mm": float(text_margin),
+        "text_letter_spacing": float(text_letter_spacing),
+        "text_padding_mm": 3.0,
+        "text_corner_radius_mm": 2.0,
         "verbose": False,
     }
+
+
+def _build_text_label(cfg, xform, th, inter_dir):
+    """Build the wording plate, tolerating font/render errors so a bad font
+    name never kills the preview or the export. Returns (label, error_str)."""
+    if not cfg.get("text_enabled"):
+        return None, None
+    bottom_y = xform["bounds_mm"][0][1]
+    if not th.tab.is_empty:
+        bottom_y = min(bottom_y, th.tab.bounds[1])
+    try:
+        label = build_text_label(xform["bounds_mm"], cfg, inter_dir,
+                                 bottom_y=bottom_y, verbose=False)
+        return label, None
+    except Exception as e:
+        return None, f"text failed: {e}"
 
 
 def preview_fn(image_path, *args):
@@ -147,21 +179,26 @@ def preview_fn(image_path, *args):
     lines_mm = apply_transform(lines.polygon, xform) if not lines.polygon.is_empty else MultiPolygon()
     color_parts = [(apply_transform(cp.polygon, xform), cp.rgb) for cp in colors]
 
-    # Canvas bounds = silhouette + tab combined
-    if th.tab.is_empty:
-        bounds_mm = xform["bounds_mm"]
-    else:
-        merged = unary_union([sil_mm, th.tab])
-        bb = merged.bounds
-        bounds_mm = ((bb[0], bb[1]), (bb[2], bb[3]))
+    text_label, text_err = _build_text_label(cfg, xform, th, state["inter_dir"])
+
+    # Canvas bounds = silhouette + tab + wording plate combined
+    pieces = [sil_mm]
+    if not th.tab.is_empty:
+        pieces.append(th.tab)
+    if text_label is not None and not text_label.is_empty:
+        pieces.append(text_label.plate)
+    bb = unary_union(pieces).bounds
+    bounds_mm = ((bb[0], bb[1]), (bb[2], bb[3]))
 
     img = render_topdown(sil_mm, lines_mm, color_parts, th.tab, th.hole,
-                         bounds_mm, ppmm=10)
+                         bounds_mm, ppmm=10, text_label=text_label)
     status = (
         f"Keychain subject: {xform['bounds_mm'][1][0]:.1f} \u00d7 "
         f"{xform['bounds_mm'][1][1]:.1f} mm"
         f"  \u2192  {len(colors)} color parts + lines + base"
         + (f" + tab" if not th.tab.is_empty else "")
+        + (f" + text" if (text_label is not None and not text_label.is_empty) else "")
+        + (f"  \u26a0 {text_err}" if text_err else "")
     )
     return img, status
 
@@ -179,6 +216,7 @@ def generate_fn(image_path, *args, progress=gr.Progress()):
     sil = state["sil"]
     xform = compute_px_to_mm(sil.image_shape, cfg["target_size_mm"], sil.polygon)
     th = build_tab_and_hole(xform["bounds_mm"], cfg, verbose=False)
+    text_label, text_err = _build_text_label(cfg, xform, th, state["inter_dir"])
 
     progress(0.5, desc="Extruding...")
     parts = build_parts(
@@ -187,6 +225,7 @@ def generate_fn(image_path, *args, progress=gr.Progress()):
         colors=state["colors"],
         hole_mp=th.hole,
         tab_mp=th.tab,
+        text_label=text_label,
         image_shape=sil.image_shape,
         cfg=cfg,
         verbose=False,
@@ -213,6 +252,7 @@ def generate_fn(image_path, *args, progress=gr.Progress()):
     status = (
         f"\u2713 Generated {len(parts)} parts, {watertight}/{len(parts)} watertight. "
         f"3MF ready to drop into Bambu Studio."
+        + (f"  \u26a0 {text_err}" if text_err else "")
     )
     return str(mf_path), str(zip_path), status
 
@@ -269,6 +309,27 @@ def build_ui() -> gr.Blocks:
                     hole_slot_width = gr.Slider(2.0, 10.0, value=4.0, step=0.5,
                                                   label="hole_slot_width (slot)")
 
+                with gr.Accordion("Wording plate (below image)", open=False):
+                    text_enabled = gr.Checkbox(value=False, label="text_enabled")
+                    text_string = gr.Textbox(value="NAME", label="text (use Enter for 2nd line)",
+                                              lines=1)
+                    text_font_name = gr.Textbox(
+                        value="", label="font (.ttf path or family; blank = bold sans default)",
+                        placeholder="e.g. arialbd.ttf  — or leave blank")
+                    text_font_file = gr.File(
+                        label="...or upload your own .ttf/.otf (e.g. a Disney-style font)",
+                        file_types=[".ttf", ".otf"], type="filepath")
+                    text_height = gr.Slider(3.0, 20.0, value=8.0, step=0.5,
+                                            label="text_height_mm (letter height)")
+                    text_thickness = gr.Slider(0.4, 3.0, value=1.0, step=0.1,
+                                               label="text_thickness_mm (raise above plate)")
+                    text_recessed = gr.Checkbox(value=False,
+                                                label="text_recessed (engrave instead of raise)")
+                    text_margin = gr.Slider(-2.0, 8.0, value=1.5, step=0.5,
+                                            label="text_margin_mm (gap below image)")
+                    text_letter_spacing = gr.Slider(0.0, 0.5, value=0.0, step=0.02,
+                                                    label="text_letter_spacing (tracking)")
+
                 generate_btn = gr.Button("\u2605  Generate 3MF + STL", variant="primary", size="lg")
 
             with gr.Column(scale=1, min_width=360):
@@ -284,6 +345,9 @@ def build_ui() -> gr.Blocks:
             tab_corner_r, tab_overlap,
             hole_type, hole_diameter, hole_edge_margin,
             hole_spacing, hole_slot_length, hole_slot_width,
+            text_enabled, text_string, text_font_file, text_font_name,
+            text_height, text_thickness, text_recessed, text_margin,
+            text_letter_spacing,
         ]
 
         # Any slider release OR image change triggers preview

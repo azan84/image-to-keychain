@@ -184,12 +184,19 @@ def build_parts(silhouette_mp: MultiPolygon,
                 image_shape: tuple[int, int],
                 cfg: dict,
                 tab_mp: MultiPolygon | None = None,
+                text_label=None,             # TextLabel | None
                 verbose: bool = True) -> list[KeychainPart]:
-    """Build all keychain parts: base (+tab) + lines + one per color cluster.
+    """Build all keychain parts: base (+tab) + lines + one per color cluster
+    (+ an optional wording plate below the subject).
 
     Base polygon = silhouette \u222a tab  MINUS hole.
     Lines and colors are clipped to the original silhouette so they never
     extend onto the tab (tab should be flat base-material only).
+
+    When ``text_label`` is given, two extra bodies are appended: ``text_plate``
+    (the backing strip, same Z as the base so it welds) and ``text`` (the
+    raised letters, or the raised frame when recessed). Both arrive already in
+    keychain-mm space, so no transform is applied to them.
     """
     log = get_logger(verbose=verbose)
     target_mm = float(cfg.get("target_size_mm", 60.0))
@@ -301,6 +308,35 @@ def build_parts(silhouette_mp: MultiPolygon,
             name=cp.safe_name, role="color", polygon=clipped,
             z_min=base_t, z_max=base_t + color_t, rgb=cp.rgb,
         ))
+
+    # Wording plate (separate bodies, below the subject). The plate arrives in
+    # keychain-mm space already, so no transform. Plate welds to the keychain
+    # base; the letters sit on top of the plate (raised) — or, when recessed,
+    # the top layer is the plate with the letters cut out, so the letters read
+    # as engraved recesses.
+    if text_label is not None and not text_label.is_empty:
+        plate_mp = _to_mp(text_label.plate)
+        glyphs_mp = _to_mp(text_label.glyphs)
+        plate_t = float(text_label.plate_thickness)
+        text_t = float(text_label.text_thickness)
+        parts.append(KeychainPart(
+            name="text_plate", role="text_plate", polygon=plate_mp,
+            z_min=0.0, z_max=plate_t, rgb=text_label.plate_color,
+        ))
+        if text_label.recessed:
+            top_poly = _safe_boolean("difference", plate_mp, glyphs_mp)
+            top_rgb = text_label.plate_color
+        else:
+            top_poly = glyphs_mp
+            top_rgb = text_label.text_color
+        if not top_poly.is_empty:
+            parts.append(KeychainPart(
+                name="text", role="text", polygon=top_poly,
+                z_min=plate_t, z_max=plate_t + text_t, rgb=top_rgb,
+            ))
+        bb = plate_mp.bounds
+        log.info("  text plate (separate parts) bounds: (%.2f, %.2f) -> (%.2f, %.2f) mm",
+                 bb[0], bb[1], bb[2], bb[3])
 
     # Extrude
     for part in parts:

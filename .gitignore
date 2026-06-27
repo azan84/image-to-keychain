@@ -14,3 +14,10 @@ out_ui/
 *.stl
 !examples/sample_output.3mf
 !examples/sample_output_parts/*.stl
+
+# Waltograph (Disney-style) font — personal-use license only. Kept on disk
+# locally so the `disney` option still works for you, but NOT committed /
+# redistributed in this public repo. The bundled DejaVuSans-Bold is the
+# open-license default instead.
+fonts/waltograph*
+fonts/license.txt

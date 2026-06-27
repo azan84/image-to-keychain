@@ -1,3 +1,15 @@
+---
+title: Image to Keychain
+emoji: 🔑
+colorFrom: red
+colorTo: gray
+sdk: gradio
+app_file: app.py
+pinned: false
+license: mit
+short_description: Turn a PNG into a multi-color 3D-printable keychain
+---
+
 # image_to_keychain
 
 Automated pipeline that converts a 2D stylized image (anime/chibi PNG) into
@@ -182,6 +194,48 @@ directly into the silhouette" behavior — you'd typically only want
 that if you deliberately want to pierce the subject (e.g. a background
 plate where a hole in a corner is fine).
 
+## Wording plate (name tag)
+
+Add a line of text on a rounded **name plate** below the image — like the
+parametric name keychains on MakerWorld. It comes out as **two extra
+objects**, `text_plate` (the strip) and `text` (the raised letters), both
+at the base Z range so they weld onto the keychain in the slicer:
+
+```
+   ┌──────────────┐
+   │   subject    │
+   └──────────────┘
+   ┌──────────────┐
+   │   LUQMAN     │   ← text_plate + text (separate bodies)
+   └──────────────┘
+```
+
+CLI:
+
+```bash
+python image_to_keychain.py --input cat.png --text "LUQMAN"
+python image_to_keychain.py --input cat.png --text "LINE 1
+LINE 2" --text-height-mm 10 --text-recessed
+```
+
+In the **web UI**, open the *Wording plate (below image)* panel, tick
+`text_enabled`, type the wording, and the live preview shows the plate.
+
+**Font:** the default is a bold sans — **Arial Bold** on Windows, and
+**DejaVu Sans Bold** on Linux / the hosted web app (installed via the
+`fonts-dejavu-core` system package in `packages.txt`, an open/redistributable
+font). Any other `.ttf`/`.otf` works too: pass its path, or upload it in the
+UI's font field.
+
+**Disney look (Waltograph):** Waltograph is **personal-use only**, so it is
+**not** bundled in this (public) repo. To use it locally, drop `waltographUI.ttf`
+into `./fonts` and set `text_font: disney` (or pass its path). The `fonts/`
+`.gitignore` keeps it out of commits, so it won't be redistributed.
+
+Assign a contrasting filament to the `text` body in Bambu Studio, drag the
+plate up so it touches the keychain bottom, then multi-select both + the
+keychain and **Combine / weld** them into one printed piece.
+
 ## Key config parameters
 
 | Parameter | Default | What it does |
@@ -203,6 +257,15 @@ plate where a hole in a corner is fine).
 | `hole_diameter` | 4.0 | For `round` / `double`. |
 | `hole_edge_margin` | 3.0 | Min distance from hole edge to tab outer edge. |
 | `hole_position` | `top-center` | Legacy, only used when `tab_enabled=false`. |
+| **`text_enabled`** | `false` | Add a wording plate below the image. Or just pass `--text "NAME"`. |
+| **`text_string`** | `NAME` | The wording. Use `\n` (or Enter in the UI) for multiple lines. |
+| **`text_font`** | `""` | `.ttf` path or family name; blank = DejaVu Sans Bold (Arial Bold on Windows). `disney` works if you add `waltographUI.ttf` to `./fonts` locally. |
+| **`text_height_mm`** | 8.0 | Letter height. |
+| **`text_thickness_mm`** | 1.0 | How far raised letters rise above the plate. |
+| `text_plate_thickness_mm` | base | Plate thickness; blank = `base_thickness` so it welds to the keychain. |
+| `text_margin_mm` | 1.5 | Gap between the image bottom and the plate top (negative = overlap). |
+| `text_recessed` | `false` | `true` = engrave letters into the plate instead of raising them. |
+| `text_color` / `text_plate_color` | dark / light | Filament-color hints for the two bodies. |
 
 ## In Bambu Studio
 
